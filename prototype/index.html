@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🎮 Heraniya's Journey - Prototype</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Arial Rounded MT Bold', sans-serif;
+            background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%);
+            overflow: hidden;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        #gameCanvas {
+            background: linear-gradient(180deg, #F5E6D3 0%, #FFE4B5 100%);
+            border: 8px solid #8B4513;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            max-width: 100%;
+            max-height: 80vh;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .counter {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 25px;
+            border-radius: 20px;
+            border: 4px solid #333;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .counter-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 40px;
+            border-radius: 20px;
+            border: 4px solid #333;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.05); }
+        }
+
+        .emoji {
+            font-size: 1.2em;
+        }
+
+        #title {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 40px;
+            border-radius: 20px;
+            border: 4px solid #FF69B4;
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #FF69B4;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .counter {
+                font-size: 18px;
+                padding: 10px 15px;
+            }
+            .instructions {
+                font-size: 20px;
+                padding: 15px 25px;
+            }
+            #title {
+                font-size: 24px;
+                padding: 15px 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="ui">
+        <div class="counter-group">
+            <div class="counter">⭐ <span id="starCount">0</span></div>
+            <div class="counter">🍪 <span id="cookieCount">0</span></div>
+            <div class="counter">💕 <span id="heartCount">0</span></div>
+        </div>
+    </div>
+
+    <div id="title">
+        💕 Heraniya's Journey 💕
+    </div>
+
+    <div class="instructions">
+        👆 TAP ANYWHERE TO JUMP! 🦘
+    </div>
+
+    <script>
+        // Game Configuration
+        const CONFIG = {
+            CANVAS_WIDTH: 1200,
+            CANVAS_HEIGHT: 600,
+            GRAVITY: 0.6,
+            WALK_SPEED: 3,
+            JUMP_FORCE: 15,
+            DOUBLE_JUMP_FORCE: 13,
+            GROUND_Y: 500,
+            PLAYER_SIZE: 60,
+            COLLECTIBLE_SIZE: 30,
+            COYOTE_TIME: 0.2,
+            SPAWN_INTERVAL: 2000 // ms
+        };
+
+        // Get canvas and context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvas() {
+            const maxWidth = Math.min(window.innerWidth - 20, CONFIG.CANVAS_WIDTH);
+            const maxHeight = Math.min(window.innerHeight * 0.8, CONFIG.CANVAS_HEIGHT);
+            const scale = Math.min(maxWidth / CONFIG.CANVAS_WIDTH, maxHeight / CONFIG.CANVAS_HEIGHT);
+
+            canvas.width = CONFIG.CANVAS_WIDTH;
+            canvas.height = CONFIG.CANVAS_HEIGHT;
+            canvas.style.width = (CONFIG.CANVAS_WIDTH * scale) + 'px';
+            canvas.style.height = (CONFIG.CANVAS_HEIGHT * scale) + 'px';
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Player object
+        const player = {
+            x: 200,
+            y: CONFIG.GROUND_Y - CONFIG.PLAYER_SIZE,
+            width: CONFIG.PLAYER_SIZE,
+            height: CONFIG.PLAYER_SIZE,
+            velocityY: 0,
+            isGrounded: false,
+            canDoubleJump: false,
+            coyoteTimeCounter: 0,
+            color: '#FFB6C1' // Pink for Heraniya
+        };
+
+        // Game state
+        const gameState = {
+            stars: 0,
+            cookies: 0,
+            hearts: 0,
+            collectibles: [],
+            particles: [],
+            score: 0,
+            cameraX: 0
+        };
+
+        // Collectible types
+        const COLLECTIBLE_TYPES = {
+            STAR: { emoji: '⭐', color: '#FFD700', points: 10, stat: 'stars' },
+            COOKIE: { emoji: '🍪', color: '#D2691E', points: 20, stat: 'cookies' },
+            HEART: { emoji: '💕', color: '#FF69B4', points: 30, stat: 'hearts' }
+        };
+
+        // Collectible class
+        class Collectible {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.width = CONFIG.COLLECTIBLE_SIZE;
+                this.height = CONFIG.COLLECTIBLE_SIZE;
+                this.type = type;
+                this.collected = false;
+                this.floatOffset = Math.random() * Math.PI * 2;
+                this.floatSpeed = 0.05;
+                this.baseY = y;
+            }
+
+            update() {
+                // Gentle floating animation
+                this.y = this.baseY + Math.sin(Date.now() * 0.001 * this.floatSpeed + this.floatOffset) * 10;
+            }
+
+            draw() {
+                if (this.collected) return;
+
+                const screenX = this.x - gameState.cameraX;
+
+                // Draw glow
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.type.color;
+
+                // Draw collectible emoji
+                ctx.font = 'bold 40px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.type.emoji, screenX + this.width/2, this.y + this.height/2);
+
+                ctx.shadowBlur = 0;
+            }
+
+            checkCollision(player) {
+                if (this.collected) return false;
+
+                const screenX = this.x - gameState.cameraX;
+
+                return player.x < screenX + this.width &&
+                       player.x + player.width > screenX &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+
+            collect() {
+                this.collected = true;
+                gameState[this.type.stat]++;
+                gameState.score += this.type.points;
+
+                // Update UI
+                document.getElementById('starCount').textContent = gameState.stars;
+                document.getElementById('cookieCount').textContent = gameState.cookies;
+                document.getElementById('heartCount').textContent = gameState.hearts;
+
+                // Create particles
+                createParticles(this.x - gameState.cameraX, this.y, this.type.color);
+
+                // Play sound (if you add audio later)
+                console.log(`Collected ${this.type.emoji}!`);
+            }
+        }
+
+        // Particle class
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.velocityX = (Math.random() - 0.5) * 8;
+                this.velocityY = (Math.random() - 0.5) * 8 - 4;
+                this.life = 1.0;
+                this.decay = 0.02;
+                this.size = Math.random() * 8 + 4;
+                this.color = color;
+            }
+
+            update() {
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+                this.velocityY += 0.3; // Gravity
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+
+            isDead() {
+                return this.life <= 0;
+            }
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                gameState.particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // Spawn collectibles
+        function spawnCollectible() {
+            const types = Object.values(COLLECTIBLE_TYPES);
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            const x = gameState.cameraX + CONFIG.CANVAS_WIDTH + 100;
+            const y = CONFIG.GROUND_Y - 100 - Math.random() * 200;
+
+            gameState.collectibles.push(new Collectible(x, y, type));
+        }
+
+        // Initial collectibles
+        for (let i = 0; i < 10; i++) {
+            const types = Object.values(COLLECTIBLE_TYPES);
+            const type = types[Math.floor(Math.random() * types.length)];
+            const x = 400 + i * 200 + Math.random() * 100;
+            const y = CONFIG.GROUND_Y - 100 - Math.random() * 200;
+            gameState.collectibles.push(new Collectible(x, y, type));
+        }
+
+        // Spawn more collectibles periodically
+        setInterval(spawnCollectible, CONFIG.SPAWN_INTERVAL);
+
+        // Input handling
+        function handleJump() {
+            if (player.isGrounded || player.coyoteTimeCounter > 0) {
+                // Regular jump
+                player.velocityY = -CONFIG.JUMP_FORCE;
+                player.isGrounded = false;
+                player.coyoteTimeCounter = 0;
+                player.canDoubleJump = true;
+                console.log('Jump!');
+            } else if (player.canDoubleJump) {
+                // Double jump
+                player.velocityY = -CONFIG.DOUBLE_JUMP_FORCE;
+                player.canDoubleJump = false;
+                console.log('Double Jump!');
+            }
+        }
+
+        // Touch/Click events
+        canvas.addEventListener('click', handleJump);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleJump();
+        });
+
+        // Keyboard for desktop testing
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                e.preventDefault();
+                handleJump();
+            }
+        });
+
+        // Draw player
+        function drawPlayer() {
+            // Draw shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.ellipse(player.x + player.width/2, CONFIG.GROUND_Y + 5, player.width * 0.4, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw player (Heraniya)
+            ctx.fillStyle = player.color;
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+
+            // Body
+            ctx.beginPath();
+            ctx.roundRect(player.x, player.y, player.width, player.height, 15);
+            ctx.fill();
+            ctx.stroke();
+
+            // Face
+            const faceY = player.y + player.height * 0.3;
+
+            // Eyes
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(player.x + player.width * 0.35, faceY, 4, 0, Math.PI * 2);
+            ctx.arc(player.x + player.width * 0.65, faceY, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Smile
+            ctx.beginPath();
+            ctx.arc(player.x + player.width/2, faceY + 5, 12, 0, Math.PI);
+            ctx.stroke();
+
+            // Cheeks
+            ctx.fillStyle = '#FFB6BA';
+            ctx.beginPath();
+            ctx.arc(player.x + player.width * 0.2, faceY + 8, 6, 0, Math.PI * 2);
+            ctx.arc(player.x + player.width * 0.8, faceY + 8, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw ground
+        function drawGround() {
+            const groundHeight = CONFIG.CANVAS_HEIGHT - CONFIG.GROUND_Y;
+
+            // Grass
+            ctx.fillStyle = '#90EE90';
+            ctx.fillRect(0, CONFIG.GROUND_Y, CONFIG.CANVAS_WIDTH, groundHeight);
+
+            // Dirt
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, CONFIG.GROUND_Y + 20, CONFIG.CANVAS_WIDTH, groundHeight - 20);
+
+            // Grass blades
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 2;
+            for (let x = 0; x < CONFIG.CANVAS_WIDTH; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, CONFIG.GROUND_Y);
+                ctx.lineTo(x - 3, CONFIG.GROUND_Y - 10);
+                ctx.stroke();
+            }
+        }
+
+        // Draw background
+        function drawBackground() {
+            // Sky (already set as canvas background)
+
+            // Clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            const cloudOffset = (gameState.cameraX * 0.3) % 400;
+
+            for (let i = -1; i < 5; i++) {
+                const x = i * 400 - cloudOffset;
+                drawCloud(x, 80);
+                drawCloud(x + 200, 140);
+            }
+
+            // Sun
+            ctx.fillStyle = '#FFD700';
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = '#FFA500';
+            ctx.beginPath();
+            ctx.arc(100, 100, 40, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        function drawCloud(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, 30, 0, Math.PI * 2);
+            ctx.arc(x + 25, y, 35, 0, Math.PI * 2);
+            ctx.arc(x + 50, y, 30, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Update game logic
+        function update() {
+            // Auto-walk
+            gameState.cameraX += CONFIG.WALK_SPEED;
+
+            // Apply gravity
+            if (!player.isGrounded) {
+                player.velocityY += CONFIG.GRAVITY;
+            }
+
+            // Update player position
+            player.y += player.velocityY;
+
+            // Ground collision
+            if (player.y + player.height >= CONFIG.GROUND_Y) {
+                player.y = CONFIG.GROUND_Y - player.height;
+                player.velocityY = 0;
+                player.isGrounded = true;
+                player.canDoubleJump = false;
+            } else {
+                player.isGrounded = false;
+            }
+
+            // Coyote time
+            if (player.isGrounded) {
+                player.coyoteTimeCounter = CONFIG.COYOTE_TIME;
+            } else {
+                player.coyoteTimeCounter -= 1/60;
+            }
+
+            // Update collectibles
+            gameState.collectibles.forEach(collectible => {
+                collectible.update();
+
+                if (collectible.checkCollision(player)) {
+                    collectible.collect();
+                }
+            });
+
+            // Remove collected collectibles that are off-screen
+            gameState.collectibles = gameState.collectibles.filter(c =>
+                !c.collected || c.x - gameState.cameraX > -100
+            );
+
+            // Update particles
+            gameState.particles.forEach(particle => particle.update());
+            gameState.particles = gameState.particles.filter(p => !p.isDead());
+        }
+
+        // Render game
+        function render() {
+            // Clear canvas
+            ctx.clearRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+
+            // Draw background
+            drawBackground();
+
+            // Draw ground
+            drawGround();
+
+            // Draw collectibles
+            gameState.collectibles.forEach(collectible => collectible.draw());
+
+            // Draw particles
+            gameState.particles.forEach(particle => particle.draw());
+
+            // Draw player
+            drawPlayer();
+
+            // Draw distance indicator
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Distance: ${Math.floor(gameState.cameraX)}m`, CONFIG.CANVAS_WIDTH - 20, 30);
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        console.log('🎮 Heraniya\'s Journey - Web Prototype');
+        console.log('Tap anywhere or press SPACE to jump!');
+        gameLoop();
+
+        // Add roundRect polyfill for older browsers
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                this.beginPath();
+                this.moveTo(x + r, y);
+                this.arcTo(x + w, y, x + w, y + h, r);
+                this.arcTo(x + w, y + h, x, y + h, r);
+                this.arcTo(x, y + h, x, y, r);
+                this.arcTo(x, y, x + w, y, r);
+                this.closePath();
+                return this;
+            };
+        }
+    </script>
+</body>
+</html>
