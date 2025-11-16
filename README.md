@@ -83,17 +83,37 @@ cd heraniya_-_somadev_movements
 
 ## 🎨 Current Status
 
-**Phase:** Pre-Production (Week 1)
+**Phase:** Pre-Production (Week 1) - **PROTOTYPE READY!** 🎮
 
 ### Completed
 - [x] Game design document
 - [x] Project structure setup
 - [x] Technical specifications
 - [x] Documentation framework
+- [x] Unity core scripts (9 files, ~2,400 lines)
+- [x] **Playable web prototype** ✨
+
+### 🎮 Play the Prototype NOW!
+
+**Just open this file in your browser:**
+```
+prototype/index.html
+```
+
+**Or try it online:** (double-click the file)
+
+Features:
+- ✅ Tap-to-jump controls
+- ✅ Auto-walk movement
+- ✅ Collectibles (stars, cookies, hearts)
+- ✅ Particle effects
+- ✅ Mobile & desktop support
+
+See [prototype/README.md](./prototype/README.md) for testing guide.
 
 ### In Progress
-- [ ] Game engine selection
-- [ ] Prototype development
+- [ ] Prototype testing & feedback
+- [ ] Unity project initialization
 - [ ] Asset creation pipeline
 
 See [ROADMAP.md](./docs/ROADMAP.md) for full development timeline.
